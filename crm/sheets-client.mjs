@@ -1,9 +1,9 @@
 // Google Sheets pilot transport. Credentials are sent only in a POST body.
 const endpointPattern=/^https:\/\/script\.google\.com\/macros\/s\/[A-Za-z0-9_-]+\/exec$/;
 const tokenPattern=/^[a-f0-9]{64}\.[a-f0-9]{64}$/;
-const readOnlyMethods=new Set(['crmSession','crmWorkspace','crmWorkspaceFresh','crmRead']);
+const readOnlyMethods=new Set(['crmSession','crmBootstrap','crmCard','crmWorkspace','crmWorkspaceFresh','crmRead']);
 export const sessionLifetime=12*60*60*1000;
-export const rpcArity=Object.freeze({crmEmailStart:2,crmEmailVerify:3,crmEmailLogout:1,crmSession:1,crmWorkspace:1,crmWorkspaceFresh:1,crmRead:2,crmSaveRead:5,crmMoveRead:5,crmRecordRead:5,crmCreateLead:3,crmItemSave:5});
+export const rpcArity=Object.freeze({crmEmailStart:2,crmEmailVerify:3,crmEmailLogout:1,crmSession:1,crmBootstrap:1,crmCard:2,crmWorkspace:1,crmWorkspaceFresh:1,crmRead:2,crmSaveRead:5,crmMoveRead:5,crmRecordRead:5,crmCreateLead:3,crmItemSave:5});
 export function endpointReady(value){return endpointPattern.test(value||'');}
 export function createSheetsClient(backendUrl,{fetchImpl=fetch,onMeasure=()=>{},now=()=>performance.now()}={}){
   return async function call(method,...args){
@@ -16,18 +16,20 @@ export function createSheetsClient(backendUrl,{fetchImpl=fetch,onMeasure=()=>{},
       if(!response.ok)throw new Error('network');
       reply=await response.json();
     }catch{
-      throw new Error(readOnlyMethods.has(method)?'CRM_NETWORK: Не удалось получить данные. Проверьте соединение и повторите загрузку.':'CRM_NETWORK: Ответ сервера не получен. Изменение могло сохраниться. Повторите ту же команду без изменения полей.');
+      throw new Error(method==='crmEmailStart'?'CRM_NETWORK: Ответ на запрос кода не получен. Проверьте почту; если письмо пришло, введите код в этой же вкладке.':readOnlyMethods.has(method)?'CRM_NETWORK: Не удалось получить данные. Проверьте соединение и повторите загрузку.':'CRM_NETWORK: Ответ сервера не получен. Изменение могло сохраниться. Повторите ту же команду без изменения полей.');
     }finally{
       clearTimeout(timer);
       // Method and duration only. Never record body, email, code or token.
-      onMeasure({method,milliseconds:Math.max(0,Math.round(now()-started))});
+      const sample={method,milliseconds:Math.max(0,Math.round(now()-started))};
+      if(Number.isFinite(reply?.serverMs)&&reply.serverMs>=0)sample.serverMilliseconds=Math.round(reply.serverMs);
+      onMeasure(sample);
     }
     if(reply?.ok===true)return reply.result;
     if(reply?.ok===false&&typeof reply.error==='string')throw new Error(reply.error);
     throw new Error('CRM_RESPONSE: Сервер вернул неподдерживаемый ответ.');
   };
 }
-function sessionKey(backendUrl){return 'fiverox.kbr.crm.session.v1:'+String(backendUrl||'').split('/s/')[1]?.split('/')[0];}
+export function sessionKey(backendUrl){return 'fiverox.kbr.crm.session.v1:'+String(backendUrl||'').split('/s/')[1]?.split('/')[0];}
 export function readStoredSession(storage,backendUrl,now=Date.now()){
   try{
     const value=JSON.parse(storage.getItem(sessionKey(backendUrl))||'null');
@@ -40,6 +42,22 @@ export function storeSession(storage,backendUrl,identity,now=Date.now()){
   try{storage.setItem(sessionKey(backendUrl),JSON.stringify({email:identity.email,role:identity.role,token:identity.token,issuedAt:now,expiresAt:now+sessionLifetime}));return true;}catch{return false;}
 }
 export function clearStoredSession(storage,backendUrl){try{storage.removeItem(sessionKey(backendUrl));}catch{}}
+export function migrateStoredSession(storage,legacy,backendUrl,now=Date.now()){
+  const saved=readStoredSession(storage,backendUrl,now);if(saved)return saved;
+  const previous=readStoredSession(legacy,backendUrl,now);if(!previous)return null;
+  try{storage.setItem(sessionKey(backendUrl),JSON.stringify(previous));if(storage!==legacy)clearStoredSession(legacy,backendUrl);}catch{}
+  // Migration preserves the original expiry; refresh never grants another 12h.
+  return previous;
+}
+const pendingKey=backendUrl=>sessionKey(backendUrl)+':pending';
+export function readPendingSignIn(storage,backendUrl,now=Date.now()){
+  try{const item=JSON.parse(storage.getItem(pendingKey(backendUrl))||'null');
+    if(!item||typeof item.email!=='string'||!item.email||item.email.length>254||!/^[a-f0-9]{64}$/.test(item.proof||'')||!Number.isFinite(item.startedAt)||!Number.isFinite(item.resendAt)||now<item.startedAt||now-item.startedAt>=600000){storage.removeItem(pendingKey(backendUrl));return null;}
+    return item;
+  }catch{return null;}
+}
+export function storePendingSignIn(storage,backendUrl,item){try{storage.setItem(pendingKey(backendUrl),JSON.stringify(item));return true;}catch{return false;}}
+export function clearPendingSignIn(storage,backendUrl){try{storage.removeItem(pendingKey(backendUrl));}catch{}}
 export function verifiedSheetUrl(value){try{const url=new URL(value);return url.origin==='https://docs.google.com'&&/^\/spreadsheets\/d\/[A-Za-z0-9_-]+\/edit$/.test(url.pathname)&&!url.search&&!url.hash?url.href:'';}catch{return '';}}
 export function workingValues(record){return ['stage','manager','due','next','last','note','amount','reason'].map(key=>String(record?.[key]??''));}
 export function normalizePilotLead(record){return {...record,kind:record.stage==='Клиент'?'customer':'inquiry',fields:Array.isArray(record.fields)?record.fields:workingValues(record)};}

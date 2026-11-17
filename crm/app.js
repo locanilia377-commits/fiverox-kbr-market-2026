@@ -200,6 +200,7 @@ function historyHtml(){if(current._historyStale)return `<section><h3>Истор�
 function renderDrawer(){if(!current)return;$('cardTitle').textContent=current.name;$('cardMeta').textContent=[current.city,current.address,current.profile,current.id].filter(Boolean).join(' · ');const links=(current.links||[]).map((link,i)=>{const url=safeUrl(link);return url?`<a href="${esc(url)}" target="_blank" rel="noopener noreferrer">${i?'Яндекс':'2ГИС'} ↗</a>`:'';}).join('');const tabs=[['overview','Работа с клиентом'],['profile','Профиль точки'],['plan','План действий'],['sales','Продажи'],['history','История и журнал']];let content='';if(drawerTab==='overview')content=cardFormHtml();if(drawerTab==='profile')content=profileHtml();if(drawerTab==='history')content=historyHtml();if(drawerTab==='plan'){const items=db.activities.filter(a=>a.leadId===current.id);content=`<div class="box-header"><h3>Индивидуальный план</h3>${canEdit()?btn('+ Действие','new-activity',`data-kind="task" data-lead="${esc(current.id)}" data-write`,'small primary'):''}</div><div class="action-stack">${items.map(activityCard).join('')||empty('Действий пока нет','Назначьте первый целевой шаг для этой точки.')}</div>`;}if(drawerTab==='sales'){const items=db.sales.filter(s=>s.leadId===current.id).sort((a,b)=>b.date.localeCompare(a.date));content=`<div class="box-header"><h3>История покупок</h3>${canEdit()?btn('+ Продажа','new-sale',`data-lead="${esc(current.id)}" data-write`,'small primary'):''}</div>${salesTable(items)||empty('Покупок пока нет','Запишите первую реальную покупку клиента.')}`;}$('cardBody').innerHTML=`<div class="contact-block"><div>${esc(current.phones||'Телефон не указан')}</div>${current.channels?`<div>${esc(current.channels)}</div>`:''}${links?`<div class="contact-links">${links}</div>`:''}</div><div class="detail-actions">${canEdit()?btn('Посещение','new-activity',`data-kind="visit" data-lead="${esc(current.id)}" data-write`,'small')+btn('Тест плёнки','new-activity',`data-kind="test" data-lead="${esc(current.id)}" data-write`,'small')+(isStaff()?btn('Передать дилеру','new-transfer',`data-lead="${esc(current.id)}" data-write`,'small'):''):''}</div><div class="drawer-tabs" role="group" aria-label="Разделы карточки">${tabs.map(([value,label])=>`<button type="button" class="${value===drawerTab?'active':''}" aria-pressed="${value===drawerTab}" data-action="card-tab" data-tab="${value}">${label}</button>`).join('')}</div>${current._refreshing?'<p class="drawer-status" role="status">Обновляю карточку… Поля откроются после проверки сервера.</p>':current._readFailed?`<p class="drawer-status error">${esc(current._readFailed)} ${btn('Повторить загрузку','open-card',`data-id="${esc(current.id)}"`,'small')}</p>`:cardBusy(current.id)?'<p class="drawer-status" role="status">По карточке ожидается подтверждение записи.</p>':''}${content}`;setSaving(saving);}
 async function loadCardHistory(){
   const card=current;if(!card||card._historyLoading)return;
+  if(card._refreshing){card._historyStale=true;card._historyLoading=true;renderDrawer();return;}
   const id=card.id,view=viewId,request=cardRequestId;
   card._historyLoading=true;card._historyError='';renderDrawer();
   try{
@@ -217,14 +218,14 @@ async function loadCardHistory(){
 }
 async function openCard(id){
   if(!discardChanges())return;focusReturn=document.activeElement;const view=viewId,request=++cardRequestId,preview=db?.leads.find(l=>l.id===id);drawerTab='overview';
-  current=preview?{...preview,_refreshing:true}:null;
+  current=preview?{...preview,_refreshing:true,_historyStale:true}:null;
   $('cardDrawer').hidden=false;$('drawerBackdrop').hidden=false;document.body.classList.add('drawer-open');
   if(current)renderDrawer();else{$('cardTitle').textContent='Загрузка карточки';$('cardMeta').textContent='';$('cardBody').innerHTML='<div class="loading-state"><span class="loader"></span>Загружаю карточку…</div>';}$('cardTitle').focus();
   try{const record=await crmCall('crmCard',id);if(view!==viewId||request!==cardRequestId)return;
     if(record.id!==id||!Array.isArray(record.fields)||record.fields.length!==8||record.fields.some(v=>typeof v!=='string'))throw new Error('Формат карточки не поддерживается. Повторите загрузку.');
-    current=normalizePilotLead(record);renderDrawer();
+    current=normalizePilotLead(record);renderDrawer();if(drawerTab==='history')await loadCardHistory();
   }catch(error){if(error===abandoned||view!==viewId||request!==cardRequestId)return;
-    if(current){current._refreshing=false;current._readFailed=errorText(error);renderDrawer();}
+    if(current){current._refreshing=false;current._historyLoading=false;current._readFailed=errorText(error);renderDrawer();}
     else{$('cardTitle').textContent='Карточка недоступна';$('cardBody').innerHTML=empty('Не удалось открыть карточку',errorText(error),btn('Повторить загрузку','open-card',`data-id="${esc(id)}"`));}
   }
 }

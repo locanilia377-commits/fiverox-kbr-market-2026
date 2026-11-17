@@ -12092,4 +12092,13 @@ function calc(){let next={};for(let k of Object.keys(defaults)){let v=$('#m-'+k)
 function route(){let h=location.hash.slice(1),view=['market','leads','model'].includes(h)?h:'market';document.querySelectorAll('.navigation a').forEach(a=>{if(a.hash==='#'+view)a.setAttribute('aria-current','page');else a.removeAttribute('aria-current')});({market,leads,model:sales})[view]();}
 document.querySelectorAll('[data-scope]').forEach(b=>b.onclick=()=>{scope=b.dataset.scope;filters.city='';document.querySelectorAll('[data-scope]').forEach(x=>x.setAttribute('aria-pressed',String(x===b)));route()});
 $('#closeDialog').onclick=()=>$('#leadDialog').close();$('#leadDialog').addEventListener('click',e=>{if(e.target===$('#leadDialog')){let r=e.target.getBoundingClientRect();if(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom)e.target.close()}});addEventListener('hashchange',()=>{route();scrollTo(0,0)});route();
-</script></body></html>
+</script>
+<script>
+// Only an explicitly embedded public page may request a return to its parent CRM.
+if(new URLSearchParams(location.search).get('crmEmbed')==='1'&&window.parent!==window){
+  document.documentElement.classList.add('crm-embedded-research');
+  document.addEventListener('click',event=>{const link=event.target.closest('a[href]');if(!link)return;const url=new URL(link.href,location.href);if(url.origin===location.origin&&url.pathname===new URL('crm/',location.href).pathname){event.preventDefault();window.parent.postMessage({type:'fiverox-kbr-research',command:'return'},location.origin);}});
+}
+</script>
+<style>.crm-embedded-research .masthead{position:static}.crm-embedded-research .container{max-width:1160px}.crm-embedded-research .brand-row{padding-block:12px}</style>
+</body></html>

@@ -16,7 +16,7 @@ const fields=['stage','manager','due','next','last','note','amount','reason'];
 const routes=[['leads','▦','Заявки'],['transfers','⇄','Передачи дилерам'],['customers','▣','Клиенты и точки'],['plan','✓','План действий'],['visits','◷','Посещения'],['tests','◇','Тесты плёнок'],['equipment','▱','Оборудование'],['sales','₽','Продажи'],['analytics','▥','Аналитика']];
 const activityNames={task:'Целевое действие',visit:'Посещение',test:'Тест плёнки',equipment:'Оборудование'};
 const statusLabels={pending:'Ожидает принятия',active:'Принято · доступ открыт',revoked:'Доступ отозван',expired:'Срок истёк',planned:'Запланировано',in_progress:'В работе',completed:'Выполнено',cancelled:'Отменено',issued:'Выдано',returned:'Возвращено',transferred:'Передано',accepted:'Принято',declined:'Отклонено',confirmed:'Подтверждено'};
-const colors=['#52a7c2','#6195ce','#7c8fd4','#8e8acb','#ad8cc6','#c29f5f','#76a87d','#459e87','#bf7d8b'];
+const colors=['#a4bda7','#4b9982','#126e59','#36846d','#6f9174','#8ca258','#4d8762','#245b40','#923f32'];
 const money=value=>new Intl.NumberFormat('ru-RU',{maximumFractionDigits:2}).format(Number(value)||0)+' ₽';
 const count=value=>new Intl.NumberFormat('ru-RU').format(value||0);
 const esc=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));

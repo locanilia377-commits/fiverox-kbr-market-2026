@@ -25,7 +25,7 @@ export function createSheetsClient(backendUrl,{fetchImpl=fetch,onMeasure=()=>{},
       onMeasure(sample);
     }
     if(reply?.ok===true)return reply.result;
-    if(reply?.ok===false&&typeof reply.error==='string')throw new Error(reply.error);
+    if(reply?.ok===false&&typeof reply.error==='string')throw Object.assign(new Error(reply.error),{crmDefiniteRejection:!reply.error.includes('CRM_SAVED_READ_FAILED')});
     throw new Error('CRM_RESPONSE: Сервер вернул неподдерживаемый ответ.');
   };
 }
